@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Powerline BIM &amp; GIS</title>
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI', Arial, sans-serif; background: #060e13; color: #e0e6ed; }
+
+/* ── Header ── */
+.header {
+  position: absolute; top: 0; left: 0; right: 0; height: 48px; z-index: 1000;
+  background: linear-gradient(135deg, #0a1e2e, #0d2b3e);
+  display: flex; align-items: center; padding: 0 20px;
+  border-bottom: 1px solid rgba(96, 165, 250, 0.3);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.5);
+}
+.header h1 { font-size: 15px; font-weight: 600; color: #60a5fa; letter-spacing: 0.5px; }
+.header .badge { margin-left: 12px; font-size: 10px; color: #4ade80; border: 1px solid rgba(74,222,128,0.3); padding: 1px 8px; border-radius: 8px; }
+.header .info { margin-left: auto; font-size: 11px; color: #64748b; }
+.header .import-btn { margin-left: 12px; background: rgba(96,165,250,0.15); border: 1px solid rgba(96,165,250,0.4); color: #60a5fa; padding: 4px 14px; border-radius: 6px; font-size: 12px; cursor: pointer; transition: all 0.2s; }
+.header .import-btn:hover { background: rgba(96,165,250,0.25); }
+
+/* ── Layout ── */
+.main-container { position: absolute; top: 48px; left: 0; right: 0; bottom: 0; display: flex; }
+
+/* ── Left panel: CSV data browser ── */
+.left-panel {
+  width: 340px; min-width: 340px; background: #0a1520; border-right: 1px solid rgba(96,165,250,0.15);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.left-panel h2 { font-size: 12px; color: #60a5fa; padding: 12px 16px 8px; border-bottom: 1px solid rgba(96,165,250,0.1); letter-spacing: 0.5px; }
+.csv-list { overflow-y: auto; flex: 1; }
+.csv-item { padding: 10px 16px; border-bottom: 1px solid rgba(96,165,250,0.06); cursor: pointer; transition: background 0.15s; }
+.csv-item:hover { background: rgba(96,165,250,0.08); }
+.csv-item.active { background: rgba(96,165,250,0.12); border-left: 3px solid #60a5fa; }
+.csv-item .csv-name { font-size: 12px; color: #e0e6ed; font-weight: 500; }
+.csv-item .csv-desc { font-size: 10px; color: #64748b; margin-top: 2px; }
+.csv-item .csv-count { font-size: 10px; color: #4ade80; }
+
+/* ── Data table ── */
+.data-panel { border-top: 1px solid rgba(96,165,250,0.15); max-height: 40%; display: flex; flex-direction: column; }
+.data-panel h3 { font-size: 11px; color: #60a5fa; padding: 8px 16px 6px; }
+.data-table-wrap { overflow: auto; max-height: 200px; }
+.data-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+.data-table th { background: #0d1b2a; color: #60a5fa; padding: 4px 8px; text-align: left; position: sticky; top: 0; font-weight: 500; white-space: nowrap; }
+.data-table td { padding: 3px 8px; border-bottom: 1px solid rgba(96,165,250,0.06); white-space: nowrap; color: #94a3b8; }
+.data-table tr:hover td { background: rgba(96,165,250,0.05); }
+
+/* ── Center: GIS Map ── */
+.map-panel { flex: 1; position: relative; }
+#gis-map { position: absolute; inset: 0; }
+.map-layer-control { position: absolute; top: 12px; left: 12px; z-index: 2; width: min(260px, calc(100% - 24px)); background: rgba(10, 21, 32, 0.94); border: 1px solid rgba(96, 165, 250, 0.35); border-radius: 7px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35); overflow: hidden; }
+.map-layer-control h3 { padding: 8px 10px; color: #60a5fa; font-size: 11px; letter-spacing: 0.5px; border-bottom: 1px solid rgba(96, 165, 250, 0.15); }
+.map-layer-list { max-height: 180px; overflow-y: auto; padding: 4px 0; }
+.map-layer-row { display: flex; align-items: center; gap: 7px; padding: 6px 10px; color: #dbeafe; font-size: 11px; cursor: pointer; }
+.map-layer-row:hover, .map-layer-row.active { background: rgba(96, 165, 250, 0.12); }
+.map-layer-row input { accent-color: #60a5fa; cursor: pointer; }
+.map-layer-swatch { width: 10px; height: 10px; flex: 0 0 10px; border-radius: 50%; }
+.map-layer-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Right panel: 3D Tower view ── */
+.right-panel {
+  width: 480px; min-width: 480px; background: #0a1520; border-left: 1px solid rgba(96,165,250,0.15);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.right-panel h2 { font-size: 12px; color: #60a5fa; padding: 12px 16px 8px; border-bottom: 1px solid rgba(96,165,250,0.1); letter-spacing: 0.5px; }
+#three-canvas { flex: 1; position: relative; overflow: hidden; }
+
+/* ── Tower info ── */
+.tower-info { padding: 8px 16px; border-top: 1px solid rgba(96,165,250,0.1); max-height: 200px; overflow-y: auto; }
+.tower-info .info-row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 11px; }
+.tower-info .info-row .label { color: #64748b; }
+.tower-info .info-row .value { color: #e0e6ed; font-weight: 500; }
+
+/* ── Line data panel ── */
+.line-data-panel { border-top: 1px solid rgba(96,165,250,0.15); max-height: 45%; display: flex; flex-direction: column; }
+.line-data-panel h3 { font-size: 11px; color: #60a5fa; padding: 8px 16px 6px; display: flex; justify-content: space-between; align-items: center; }
+.line-data-panel h3 .line-meta { font-size: 10px; color: #64748b; font-weight: normal; }
+.line-summary { padding: 6px 16px; border-bottom: 1px solid rgba(96,165,250,0.06); display: flex; flex-wrap: wrap; gap: 6px; }
+.line-summary .stat { display: flex; flex-direction: column; align-items: center; padding: 4px 8px; background: rgba(96,165,250,0.06); border-radius: 4px; }
+.line-summary .stat .num { font-size: 14px; font-weight: 600; color: #60a5fa; }
+.line-summary .stat .lbl { font-size: 9px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+
+/* ── Tower selector ── */
+.tower-selector { padding: 8px 16px; display: flex; gap: 6px; flex-wrap: wrap; border-bottom: 1px solid rgba(96,165,250,0.1); }
+.tower-btn { background: #0d1b2a; border: 1px solid rgba(96,165,250,0.2); color: #94a3b8; padding: 4px 10px; border-radius: 4px; font-size: 11px; cursor: pointer; transition: all 0.15s; }
+.tower-btn:hover { border-color: #60a5fa; color: #60a5fa; }
+.tower-btn.active { background: rgba(96,165,250,0.15); border-color: #60a5fa; color: #60a5fa; }
+
+/* ── Toast ── */
+.toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(10,27,42,0.95); color: #60a5fa; padding: 8px 24px; border-radius: 6px; border: 1px solid rgba(96,165,250,0.3); font-size: 12px; z-index: 9999; transition: opacity 0.3s; }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(96,165,250,0.2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(96,165,250,0.4); }
+
+/* ── Loading ── */
+.loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(6,14,19,0.8); z-index: 100; color: #60a5fa; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Powerline BIM &amp; GIS</h1>
+  <span class="badge">Multi-Line Mode</span>
+  <button class="import-btn" id="importBtn">Import Line JSON</button>
+  <input type="file" id="jsonInput" accept=".json" style="display:none">
+  <span class="info">NAD83(CSRS) · CGVD2013 · GPU Accelerated</span>
+</div>
+
+<div class="main-container">
+  <!-- Left: BIM data browser -->
+  <div class="left-panel">
+    <h2>BIM Dataset Browser</h2>
+    <div class="csv-list" id="csvList"></div>
+    <div class="data-panel">
+      <h3 id="dataTitle">Select a dataset to view</h3>
+      <div class="data-table-wrap">
+        <table class="data-table" id="dataTable"></table>
+      </div>
+    </div>
+    <div class="line-data-panel" id="lineDataPanel" style="display:none">
+      <h3 id="lineDataTitle">Line Data <span class="line-meta" id="lineDataMeta"></span></h3>
+      <div class="line-summary" id="lineSummary"></div>
+    </div>
+  </div>
+
+  <!-- Center: GIS Map -->
+  <div class="map-panel">
+    <div id="gis-map"></div>
+    <section class="map-layer-control" aria-label="Map layer control">
+      <h3>MAP LAYERS</h3>
+      <div class="map-layer-list" id="mapLayerList"></div>
+    </section>
+  </div>
+
+  <!-- Right: 3D Tower -->
+  <div class="right-panel">
+    <h2>Tower Parametric 3D Rendering</h2>
+    <div class="tower-selector" id="towerSelector"></div>
+    <div id="three-canvas"></div>
+    <div class="tower-info" id="towerInfo"></div>
+  </div>
+</div>
+
+<div class="loading" id="loading">Loading 3D engine & GIS map...</div>
+
+<!-- ── MapLibre GL ── -->
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<!-- ── Three.js (ES Module via importmap — browser native, GPU accelerated) ── -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+
+// ── Error handler ──
+window.addEventListener('error', (e) => {
+  const ld = document.getElementById('loading');
+  if (ld) ld.innerHTML = 'Loading error: ' + e.message;
+});
+window.addEventListener('unhandledrejection', (e) => {
+  const ld = document.getElementById('loading');
+  if (ld) ld.innerHTML = 'Loading error: ' + e.reason;
+});
+
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ═══════════════════════════════════════════════════════════════
+// Multi-Line Management System
+// ═══════════════════════════════════════════════════════════════
+const LINE_COLORS = ['#4ade80', '#60a5fa', '#fbbf24', '#f87171', '#c084fc', '#34d399'];
+let lines = {};
+let activeLineId = null;
+let map = null;
+
+function getLineLayerIds(lineId) {
+  return ['line-halo-' + lineId, 'line-main-' + lineId, 'tower-circles-' + lineId, 'tower-labels-' + lineId];
+}
+
+function jsonToLineData(json) {
+  const li = json.lineInfo || {};
+  const lineId = li.lineId || 'imported';
+  const color = li.color || LINE_COLORS[Object.keys(lines).length % LINE_COLORS.length];
+  const towers = (json.towerSurvey || []).map(t => ({
+    id: t.towerId,
+    type: t.towerType || 'Tangent',
+    lon: t.longitude,
+    lat: t.latitude,
+    elev: t.baseElevation || 0,
+    model: t.modelCode || '',
+    height: t.overallHeight || 39.5,
+    baseWidth: t.baseWidth || 6.4,
+    topWidth: (t.topWidth || 2600) / 1000,
+    taper: t.taperRatio || '1:65',
+    angle: t.lineAngle || 0,
+    azimuth: t.crossArmAzimuth || 90,
+    phase: t.phaseArrangement || 'A-B-C',
+    headType: t.headConfiguration || 'Cat-head',
+  }));
+
+  const csvDatas = {};
+  csvDatas['01. Tower Survey'] = {
+    desc: 'Per tower: ID, coordinates, elevation, type, attachment height, base width, taper, angle',
+    headers: ['Tower ID','Tower Type','Longitude','Latitude','Base Elev (m)','Model Code','Attachment Ht (m)','Overall Ht (m)','Base Width (m)','Top Width (mm)','Taper','Big-Number Side','Line Angle (deg)','Azimuth (deg)','Phase','Head Type','Transposition','Remarks'],
+    rows: (json.towerSurvey || []).map(t => [t.towerId, t.towerType, t.longitude, t.latitude, t.baseElevation, t.modelCode, t.attachmentHeight, t.overallHeight, t.baseWidth, t.topWidth, t.taperRatio, t.bigNumberSide || '', t.lineAngle, t.crossArmAzimuth, t.phaseArrangement, t.headConfiguration, t.transpositionTower || 'No', t.remarks || '']),
+  };
+  csvDatas['02. Conductors'] = {
+    desc: 'Per span per phase: conductor type, bundle, span length, sag, tension',
+    headers: ['Line Name','From Tower','To Tower','Phase','Conductor Type','Bundle Count','Bundle Spacing (mm)','Bundle Arrangement','Horizontal Span (m)','Vertical Span (m)','Ruling Span (m)','Elevation Diff (m)','Max Working Tension (N)','Sag (m)','Suspension Ht (m)','Jumper Type','Remarks'],
+    rows: (json.conductors || []).map(c => [c.lineName || lineId, c.fromTower, c.toTower, c.phase, c.conductorType, c.bundleCount, c.bundleSpacing, c.bundleArrangement, c.horizontalSpan, c.verticalSpan, c.rulingSpan, c.elevationDifference, c.maxWorkingTension, c.sag, c.suspensionHeight, c.jumperType || '', c.remarks || '']),
+  };
+  csvDatas['03. Shield Wire OPGW'] = {
+    desc: 'Shield wire / OPGW: type, height, sag, fibre count',
+    headers: ['From Tower','To Tower','Wire Type','Model','Outer Dia (mm)','Span (m)','Elevation Diff (m)','Max Working Tension (N)','Sag (m)','OPGW Fibre Count','Suspension Ht (m)','Grounding Method','Remarks'],
+    rows: (json.shieldWireOPGW || []).map(w => [w.fromTower, w.toTower, w.wireType, w.model, w.outerDiameter, w.spanLength, w.elevationDifference, w.maxWorkingTension, w.sag, w.opgWFibreCount || '', w.suspensionHeight, w.groundingMethod, w.remarks || '']),
+  };
+  csvDatas['04. Attachment Points'] = {
+    desc: 'Insulator attachment point coordinates (conductor positioning reference)',
+    headers: ['Tower ID','Attachment Name','Phase','Attachment Type','X Offset (mm)','Y Offset (mm)','Z Above Base (mm)','Absolute X (m)','Absolute Y (m)','Absolute Z (m)','Insulator String Len (mm)','Remarks'],
+    rows: (json.attachmentPoints || []).map(a => [a.towerId, a.attachmentName, a.phase, a.attachmentType, a.xOffset, a.yOffset, a.zAboveBase, a.absoluteX || '', a.absoluteY || '', a.absoluteZ || '', a.insulatorStringLength, a.remarks || '']),
+  };
+  csvDatas['05. Insulators Hardware'] = {
+    desc: 'Insulator strings & hardware: string type, disc count, length',
+    headers: ['Tower ID','String Position','String Type','Insulator Type','Disc Model','Disc Count','String Len (mm)','Yoke/Ball/Socket','Suspension Clamp','Dead-end Clamp','Damper/Spacer','Remarks'],
+    rows: (json.insulatorsHardware || []).map(i => [i.towerId, i.stringPosition, i.stringType, i.insulatorType, i.discModel, i.discCount, i.stringLength, i.yokeBallSocket, i.suspensionClamp, i.deadEndClamp, i.damperSpacer, i.remarks || '']),
+  };
+  csvDatas['06. Member Specs'] = {
+    desc: 'Main leg / bracing angle steel specs, material grade, bolts',
+    headers: ['Model Code','Member Category','Member Location','Specification','Material Grade','Leg Orientation','Bolt Spec','Galvanizing','Quantity (per tower)','Remarks'],
+    rows: (json.memberSpecs || []).map(m => [m.modelCode, m.memberCategory, m.memberLocation, m.specification, m.materialGrade, m.legOrientation, m.boltSpecification, m.galvanizing, m.quantity, m.remarks || '']),
+  };
+  csvDatas['07. Foundations'] = {
+    desc: 'Foundation type, depth, anchor bolts, geotechnical',
+    headers: ['Tower ID','Leg','Foundation Type','Foundation Depth (m)','Foundation Size (mm)','Anchor Bolt Spec','Anchor Bolt Spacing (mm)','Base Plate Elev (m)','Concrete Grade','Geotechnical','Remarks'],
+    rows: (json.foundations || []).map(f => [f.towerId, f.leg, f.foundationType, f.foundationDepth, f.foundationSize, f.anchorBoltSpec, f.anchorBoltSpacing, f.basePlateElevation, f.concreteGrade, f.geotechnicalCondition, f.remarks || '']),
+  };
+  csvDatas['08. Weather Cases'] = {
+    desc: 'Design temperature, wind, ice load — sag calculation input cases',
+    headers: ['Section/Line','Design Temp max/min (C)','Max Wind Speed (m/s)','Ice Thickness (mm)','Annual Avg Tension (N)','Lightning Overvoltage Case','Switching Overvoltage Case','Seismic Design','Corresponding Span/Case ID','Remarks'],
+    rows: (json.weatherCases || []).map(w => [w.sectionLine, w.designTemperature, w.maxWindSpeed, w.iceThickness, w.averageAnnualTension, w.lightningOvervoltageCase, w.switchingOvervoltageCase, w.seismicDesignCategory, w.correspondingSpanCaseId, w.remarks || '']),
+  };
+  csvDatas['09. Crossings Terrain'] = {
+    desc: 'Crossing objects, ground elevations, clearance verification',
+    headers: ['Crossing ID','Type','Name/Description','Crossing Point X','Crossing Point Y','Object Top/Ground Elev (m)','Crossing Angle (deg)','Required Clearance (m)','Tower ID/Span','Terrain Data Type','Data File Path','Geological Info','Remarks'],
+    rows: (json.crossingsTerrain || []).map(c => [c.crossingId, c.type, c.nameDescription, c.crossingPointX, c.crossingPointY, c.objectTopElevation, c.crossingAngle, c.requiredClearance, c.towerIdSpan, c.terrainDataType, c.dataFilePath, c.geologicalInfo, c.remarks || '']),
+  };
+
+  return { lineInfo: li, towers, csvDatas, color, rawData: json };
+}
+
+function addLine(json) {
+  const lineData = jsonToLineData(json);
+  const lineId = lineData.lineInfo.lineId || ('line-' + Date.now());
+  lines[lineId] = lineData;
+  if (!activeLineId) activeLineId = lineId;
+  refreshMapLines();
+  refreshMapLayerControl();
+  selectLine(lineId);
+  showToast(`Line "${lineData.lineInfo.lineName}" imported · ${lineData.towers.length} towers`);
+  return lineId;
+}
+
+function selectLine(lineId) {
+  if (!lines[lineId]) return;
+  activeLineId = lineId;
+  refreshMapLayerControl();
+  const ld = lines[lineId];
+  buildCsvList(ld.csvDatas);
+  buildTowerSelector(ld.towers);
+  if (ld.towers.length > 0) {
+    currentTowerIdx = 0;
+    renderTower(ld.towers[0]);
+    showTowerInfo(ld.towers[0]);
+  }
+  showLineDataPanel(ld);
+  if (map && ld.towers.length > 0) {
+    const coords = ld.towers.map(t => [t.lon, t.lat]);
+    const mid = coords[Math.floor(coords.length / 2)];
+    map.flyTo({ center: mid, zoom: 13, pitch: 50, duration: 1200 });
+  }
+}
+
+function showLineDataPanel(ld) {
+  const panel = document.getElementById('lineDataPanel');
+  const title = document.getElementById('lineDataTitle');
+  const meta = document.getElementById('lineDataMeta');
+  const summary = document.getElementById('lineSummary');
+  panel.style.display = 'flex';
+  title.firstChild.textContent = ld.lineInfo.lineName;
+  meta.textContent = `${ld.lineInfo.voltage} · ${ld.towers.length} towers`;
+  const json = ld.rawData;
+  const totalSpan = json.conductors ? json.conductors.reduce((s, c) => s + (c.horizontalSpan || 0), 0) : 0;
+  const condType = json.conductors && json.conductors[0] ? json.conductors[0].conductorType : '—';
+  const sagMax = json.conductors ? Math.max(...json.conductors.map(c => c.sag || 0)) : 0;
+  const tensionMax = json.conductors ? Math.max(...json.conductors.map(c => c.maxWorkingTension || 0)) : 0;
+  const crossings = json.crossingsTerrain ? json.crossingsTerrain.length : 0;
+  const spans = [
+    { num: ld.towers.length, lbl: 'Towers' },
+    { num: (totalSpan / 1000).toFixed(1) + ' km', lbl: 'Total Span' },
+    { num: condType, lbl: 'Conductor' },
+    { num: sagMax + ' m', lbl: 'Max Sag' },
+    { num: (tensionMax / 1000).toFixed(0) + ' kN', lbl: 'Max Tension' },
+    { num: crossings, lbl: 'Crossings' },
+  ];
+  summary.innerHTML = spans.map(s => `<div class="stat"><span class="num">${s.num}</span><span class="lbl">${s.lbl}</span></div>`).join('');
+}
+
+function setLineVisibility(lineId, visible) {
+  if (!map) return;
+  getLineLayerIds(lineId).forEach(layerId => {
+    if (map.getLayer(layerId)) map.setLayoutProperty(layerId, 'visibility', visible ? 'visible' : 'none');
+  });
+}
+
+function isLineVisible(lineId) {
+  if (!map || !map.getLayer('line-main-' + lineId)) return true;
+  return map.getLayoutProperty('line-main-' + lineId, 'visibility') !== 'none';
+}
+
+function refreshMapLayerControl() {
+  const list = document.getElementById('mapLayerList');
+  if (!list) return;
+  list.innerHTML = '';
+  Object.entries(lines).forEach(([id, ld]) => {
+    const row = document.createElement('label');
+    row.className = 'map-layer-row' + (id === activeLineId ? ' active' : '');
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = isLineVisible(id);
+    checkbox.setAttribute('aria-label', `Show ${ld.lineInfo.lineName || id}`);
+    checkbox.onchange = () => {
+      setLineVisibility(id, checkbox.checked);
+      if (checkbox.checked) selectLine(id);
+    };
+    const swatch = document.createElement('span');
+    swatch.className = 'map-layer-swatch';
+    swatch.style.background = ld.color;
+    const name = document.createElement('span');
+    name.className = 'map-layer-name';
+    name.textContent = ld.lineInfo.lineName || id;
+    row.append(checkbox, swatch, name);
+    row.onclick = (event) => {
+      if (event.target !== checkbox) selectLine(id);
+    };
+    list.appendChild(row);
+  });
+}
+
+function refreshMapLines() {
+  if (!map) return;
+  Object.entries(lines).forEach(([id, ld]) => {
+    const sourceId = 'line-' + id;
+    const towersSourceId = 'towers-' + id;
+    const lineLayerId = 'line-main-' + id;
+    const haloLayerId = 'line-halo-' + id;
+    const towerLayerId = 'tower-circles-' + id;
+    const labelLayerId = 'tower-labels-' + id;
+    if (map.getSource(sourceId)) return;
+    const lineCoords = ld.towers.map(t => [t.lon, t.lat]);
+    map.addSource(sourceId, { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: lineCoords }, properties: { name: ld.lineInfo.lineName } } });
+    map.addLayer({ id: haloLayerId, type: 'line', source: sourceId, paint: { 'line-color': ld.color, 'line-width': 10, 'line-opacity': 0.2 } });
+    map.addLayer({ id: lineLayerId, type: 'line', source: sourceId, paint: { 'line-color': ld.color, 'line-width': 3 } });
+    const towerFeatures = ld.towers.map(t => ({ type: 'Feature', properties: { id: t.id, type: t.type, model: t.model, lineId: id }, geometry: { type: 'Point', coordinates: [t.lon, t.lat] } }));
+    map.addSource(towersSourceId, { type: 'geojson', data: { type: 'FeatureCollection', features: towerFeatures } });
+    map.addLayer({ id: towerLayerId, type: 'circle', source: towersSourceId, paint: { 'circle-radius': 8, 'circle-color': ['match', ['get', 'type'], 'Tangent', '#4ade80', 'Angle', '#fbbf24', 'Dead-end', '#f87171', '#60a5fa'], 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2 } });
+    map.addLayer({ id: labelLayerId, type: 'symbol', source: towersSourceId, layout: { 'text-field': ['get', 'id'], 'text-size': 13, 'text-offset': [0, 1.5], 'text-anchor': 'top' }, paint: { 'text-color': '#ffffff', 'text-halo-color': '#000000', 'text-halo-width': 2 } });
+    map.on('click', lineLayerId, () => selectLine(id));
+    map.on('mouseenter', lineLayerId, () => map.getCanvas().style.cursor = 'pointer');
+    map.on('mouseleave', lineLayerId, () => map.getCanvas().style.cursor = '');
+    map.on('click', towerLayerId, e => {
+      const tid = e.features[0].properties.id;
+      const lid = e.features[0].properties.lineId;
+      const idx = lines[lid].towers.findIndex(t => t.id === tid);
+      if (idx >= 0) {
+        selectLine(lid);
+        currentTowerIdx = idx;
+        document.querySelectorAll('.tower-btn').forEach((b, i) => b.classList.toggle('active', i === idx));
+        renderTower(lines[lid].towers[idx]);
+        showTowerInfo(lines[lid].towers[idx]);
+        map.flyTo({ center: [lines[lid].towers[idx].lon, lines[lid].towers[idx].lat], zoom: 14, pitch: 55, duration: 1000 });
+      }
+    });
+    map.on('mouseenter', towerLayerId, () => map.getCanvas().style.cursor = 'pointer');
+    map.on('mouseleave', towerLayerId, () => map.getCanvas().style.cursor = '');
+  });
+  refreshMapLayerControl();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BIM Dataset — Alberta Mountain Corridor (240 kV)
+// Data loaded from external CSV files in /data/ directory
+// ═══════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════
+// Inline data (no server needed — double-click to open)
+// ═══════════════════════════════════════════════════════
+
+// Default inline data — converted to JSON format and loaded as a line
+const defaultLineJson = {
+  lineInfo: {
+    lineName: 'Alberta Mountain Corridor',
+    lineId: 'Alberta-240',
+    voltage: '240 kV',
+    description: '240kV double-circuit transmission line through Rocky Mountain foothills',
+    color: '#4ade80',
+    coordinateSystem: 'NAD83(CSRS) / UTM zone 11N',
+    verticalDatum: 'CGVD2013'
+  },
+  towerSurvey: [
+    { towerId: 'T-101', towerType: 'Dead-end', longitude: -115.8420, latitude: 52.3820, baseElevation: 1485.20, modelCode: '240KV-DE-1', attachmentHeight: 27.0, overallHeight: 42.0, baseWidth: 7.0, topWidth: 2800, taperRatio: '1:65', bigNumberSide: 'T-102', lineAngle: 0.0, crossArmAzimuth: 90.0, phaseArrangement: 'A-B-C', headConfiguration: 'Cat-head', transpositionTower: 'No', remarks: 'Dead-end tower near substation' },
+    { towerId: 'T-102', towerType: 'Tangent', longitude: -115.8580, latitude: 52.3950, baseElevation: 1522.50, modelCode: '240KV-TG-22', attachmentHeight: 24.5, overallHeight: 39.5, baseWidth: 6.4, topWidth: 2600, taperRatio: '1:65', bigNumberSide: 'T-103', lineAngle: 0.0, crossArmAzimuth: 90.0, phaseArrangement: 'A-B-C', headConfiguration: 'Cat-head', transpositionTower: 'No', remarks: '' },
+    { towerId: 'T-103', towerType: 'Tangent', longitude: -115.8740, latitude: 52.4070, baseElevation: 1548.80, modelCode: '240KV-TG-22', attachmentHeight: 24.5, overallHeight: 39.5, baseWidth: 6.4, topWidth: 2600, taperRatio: '1:65', bigNumberSide: 'T-104', lineAngle: 0.0, crossArmAzimuth: 75.0, phaseArrangement: 'A-B-C', headConfiguration: 'Cat-head', transpositionTower: 'No', remarks: '' },
+    { towerId: 'T-104', towerType: 'Angle', longitude: -115.8920, latitude: 52.4180, baseElevation: 1575.40, modelCode: '240KV-AG-28', attachmentHeight: 29.0, overallHeight: 44.0, baseWidth: 8.0, topWidth: 3200, taperRatio: '1:60', bigNumberSide: 'T-105', lineAngle: 12.0, crossArmAzimuth: 82.0, phaseArrangement: 'A-B-C', headConfiguration: 'Cat-head', transpositionTower: 'No', remarks: 'Right turn 12 degrees' },
+    { towerId: 'T-105', towerType: 'Tangent', longitude: -115.9100, latitude: 52.4310, baseElevation: 1610.60, modelCode: '240KV-TG-22', attachmentHeight: 24.5, overallHeight: 39.5, baseWidth: 6.4, topWidth: 2600, taperRatio: '1:65', bigNumberSide: 'T-106', lineAngle: 0.0, crossArmAzimuth: 82.0, phaseArrangement: 'A-B-C', headConfiguration: 'Cat-head', transpositionTower: 'No', remarks: '' },
+    { towerId: 'T-106', towerType: 'Dead-end', longitude: -115.9280, latitude: 52.4430, baseElevation: 1635.30, modelCode: '240KV-DE-1', attachmentHeight: 27.0, overallHeight: 42.0, baseWidth: 7.0, topWidth: 2800, taperRatio: '1:65', bigNumberSide: '', lineAngle: 0.0, crossArmAzimuth: 82.0, phaseArrangement: 'A-B-C', headConfiguration: 'Cat-head', transpositionTower: 'No', remarks: 'Dead-end tower near substation' }
+  ],
+  conductors: [
+    { lineName: 'Alberta-240', fromTower: 'T-101', toTower: 'T-102', phase: 'A', conductorType: 'ACSR Drake', bundleCount: 4, bundleSpacing: 450, bundleArrangement: 'Square', horizontalSpan: 1620.0, verticalSpan: 1640.0, rulingSpan: 1620.0, elevationDifference: 37.3, maxWorkingTension: 42000, sag: 11.5, suspensionHeight: 33.0, jumperType: '', remarks: '' },
+    { lineName: 'Alberta-240', fromTower: 'T-101', toTower: 'T-102', phase: 'B', conductorType: 'ACSR Drake', bundleCount: 4, bundleSpacing: 450, bundleArrangement: 'Square', horizontalSpan: 1620.0, verticalSpan: 1640.0, rulingSpan: 1620.0, elevationDifference: 37.3, maxWorkingTension: 42000, sag: 11.5, suspensionHeight: 33.0, jumperType: '', remarks: '' },
+    { lineName: 'Alberta-240', fromTower: 'T-101', toTower: 'T-102', phase: 'C', conductorType: 'ACSR Drake', bundleCount: 4, bundleSpacing: 450, bundleArrangement: 'Square', horizontalSpan: 1620.0, verticalSpan: 1640.0, rulingSpan: 1620.0, elevationDifference: 37.3, maxWorkingTension: 42000, sag: 11.5, suspensionHeight: 33.0, jumperType: '', remarks: '' },
+    { lineName: 'Alberta-240', fromTower: 'T-102', toTower: 'T-103', phase: 'A', conductorType: 'ACSR Drake', bundleCount: 4, bundleSpacing: 450, bundleArrangement: 'Square', horizontalSpan: 1480.0, verticalSpan: 1495.0, rulingSpan: 1480.0, elevationDifference: 26.3, maxWorkingTension: 42000, sag: 10.2, suspensionHeight: 33.0, jumperType: '', remarks: '' },
+    { lineName: 'Alberta-240', fromTower: 'T-102', toTower: 'T-103', phase: 'B', conductorType: 'ACSR Drake', bundleCount: 4, bundleSpacing: 450, bundleArrangement: 'Square', horizontalSpan: 1480.0, verticalSpan: 1495.0, rulingSpan: 1480.0, elevationDifference: 26.3, maxWorkingTension: 42000, sag: 10.2, suspensionHeight: 33.0, jumperType: '', remarks: '' },
+    { lineName: 'Alberta-240', fromTower: 'T-102', toTower: 'T-103', phase: 'C', conductorType: 'ACSR Drake', bundleCount: 4, bundleSpacing: 450, bundleArrangement: 'Square', horizontalSpan: 1480.0, verticalSpan: 1495.0, rulingSpan: 1480.0, elevationDifference: 26.3, maxWorkingTension: 42000, sag: 10.2, suspensionHeight: 33.0, jumperType: '', remarks: '' },
+    { lineName: 'Alberta-240', fromTower: 'T-103', toTower: 'T-104', phase: 'A', conductorType: 'ACSR Drake', bundleCount: 4, bundleSpacing: 450, bundleArrangement: 'Square', horizontalSpan: 1560.0, verticalSpan: 1575.0, rulingSpan: 1560.0, elevationDifference: 26.6, maxWorkingTension: 42000, sag: 10.8, suspensionHeight: 36.0, jumperType: 'Horizontal', remarks: 'Angle tower' },
+    { lineName: 'Alberta-240', fromTower: 'T-103', toTower: 'T-104', phase: 'B', conductorType: 'ACSR Drake', bundleCount: 4, bundleSpacing: 450, bundleArrangement: 'Square', horizontalSpan: 1560.0, verticalSpan: 1575.0, rulingSpan: 1560.0, elevationDifference: 26.6, maxWorkingTension: 42000, sag: 10.8, suspensionHeight: 36.0, jumperType: 'Horizontal', remarks: 'Angle tower' },
+    { lineName: 'Alberta-240', fromTower: 'T-103', toTower: 'T-104', phase: 'C', conductorType: 'ACSR Drake', bundleCount: 4, bundleSpacing: 450, bundleArrangement: 'Square', horizontalSpan: 1560.0, verticalSpan: 1575.0, rulingSpan: 1560.0, elevationDifference: 26.6, maxWorkingTension: 42000, sag: 10.8, suspensionHeight: 36.0, jumperType: 'Horizontal', remarks: 'Angle tower' },
+    { lineName: 'Alberta-240', fromTower: 'T-104', toTower: 'T-105', phase: 'A', conductorType: 'ACSR Drake', bundleCount: 4, bundleSpacing: 450, bundleArrangement: 'Square', horizontalSpan: 1390.0, verticalSpan: 1380.0, rulingSpan: 1390.0, elevationDifference: 35.2, maxWorkingTension: 42000, sag: 9.2, suspensionHeight: 36.0, jumperType: 'Horizontal', remarks: 'Angle tower' },
+    { lineName: 'Alberta-240', fromTower: 'T-104', toTower: 'T-105', phase: 'B', conductorType: 'ACSR Drake', bundleCount: 4, bundleSpacing: 450, bundleArrangement: 'Square', horizontalSpan: 1390.0, verticalSpan: 1380.0, rulingSpan: 1390.0, elevationDifference: 35.2, maxWorkingTension: 42000, sag: 9.2, suspensionHeight: 36.0, jumperType: 'Horizontal', remarks: 'Angle tower' },
+    { lineName: 'Alberta-240', fromTower: 'T-104', toTower: 'T-105', phase: 'C', conductorType: 'ACSR Drake', bundleCount: 4, bundleSpacing: 450, bundleArrangement: 'Square', horizontalSpan: 1390.0, verticalSpan: 1380.0, rulingSpan: 1390.0, elevationDifference: 35.2, maxWorkingTension: 42000, sag: 9.2, suspensionHeight: 36.0, jumperType: 'Horizontal', remarks: 'Angle tower' },
+    { lineName: 'Alberta-240', fromTower: 'T-105', toTower: 'T-106', phase: 'A', conductorType: 'ACSR Drake', bundleCount: 4, bundleSpacing: 450, bundleArrangement: 'Square', horizontalSpan: 1520.0, verticalSpan: 1535.0, rulingSpan: 1520.0, elevationDifference: 24.7, maxWorkingTension: 42000, sag: 10.1, suspensionHeight: 33.0, jumperType: '', remarks: '' },
+    { lineName: 'Alberta-240', fromTower: 'T-105', toTower: 'T-106', phase: 'B', conductorType: 'ACSR Drake', bundleCount: 4, bundleSpacing: 450, bundleArrangement: 'Square', horizontalSpan: 1520.0, verticalSpan: 1535.0, rulingSpan: 1520.0, elevationDifference: 24.7, maxWorkingTension: 42000, sag: 10.1, suspensionHeight: 33.0, jumperType: '', remarks: '' },
+    { lineName: 'Alberta-240', fromTower: 'T-105', toTower: 'T-106', phase: 'C', conductorType: 'ACSR Drake', bundleCount: 4, bundleSpacing: 450, bundleArrangement: 'Square', horizontalSpan: 1520.0, verticalSpan: 1535.0, rulingSpan: 1520.0, elevationDifference: 24.7, maxWorkingTension: 42000, sag: 10.1, suspensionHeight: 33.0, jumperType: '', remarks: '' }
+  ],
+  shieldWireOPGW: [
+    { fromTower: 'T-101', toTower: 'T-102', wireType: 'OPGW', model: 'OPGW-48B1-70', outerDiameter: 13.0, spanLength: 1620.0, elevationDifference: 37.3, maxWorkingTension: 21000, sag: 8.5, opgWFibreCount: '48B1', suspensionHeight: 41.0, groundingMethod: 'Direct ground', remarks: '' },
+    { fromTower: 'T-102', toTower: 'T-103', wireType: 'OPGW', model: 'OPGW-48B1-70', outerDiameter: 13.0, spanLength: 1480.0, elevationDifference: 26.3, maxWorkingTension: 21000, sag: 7.2, opgWFibreCount: '48B1', suspensionHeight: 39.0, groundingMethod: 'Sectional insulation', remarks: '' },
+    { fromTower: 'T-103', toTower: 'T-104', wireType: 'OPGW', model: 'OPGW-48B1-70', outerDiameter: 13.0, spanLength: 1560.0, elevationDifference: 26.6, maxWorkingTension: 21000, sag: 7.8, opgWFibreCount: '48B1', suspensionHeight: 39.0, groundingMethod: 'Direct ground', remarks: '' },
+    { fromTower: 'T-104', toTower: 'T-105', wireType: 'OPGW', model: 'OPGW-48B1-70', outerDiameter: 13.0, spanLength: 1390.0, elevationDifference: 35.2, maxWorkingTension: 21000, sag: 6.8, opgWFibreCount: '48B1', suspensionHeight: 43.0, groundingMethod: 'Sectional insulation', remarks: '' },
+    { fromTower: 'T-105', toTower: 'T-106', wireType: 'OPGW', model: 'OPGW-48B1-70', outerDiameter: 13.0, spanLength: 1520.0, elevationDifference: 24.7, maxWorkingTension: 21000, sag: 7.9, opgWFibreCount: '48B1', suspensionHeight: 41.0, groundingMethod: 'Direct ground', remarks: '' },
+    { fromTower: 'T-101', toTower: 'T-106', wireType: 'Ground wire', model: 'JLB20A-80', outerDiameter: 11.5, spanLength: 0, elevationDifference: 0, maxWorkingTension: 22500, sag: 0, opgWFibreCount: '', suspensionHeight: 43.0, groundingMethod: 'Direct ground', remarks: 'T-101 T-106 dead-end tower ground wire support' }
+  ],
+  attachmentPoints: [
+    { towerId: 'T-101', attachmentName: 'Left phase', phase: 'A', attachmentType: 'Strain', xOffset: -7500, yOffset: 0, zAboveBase: 30000, absoluteX: null, absoluteY: null, absoluteZ: null, insulatorStringLength: 4200, remarks: '' },
+    { towerId: 'T-101', attachmentName: 'Center phase', phase: 'B', attachmentType: 'Strain', xOffset: 0, yOffset: 0, zAboveBase: 37000, absoluteX: null, absoluteY: null, absoluteZ: null, insulatorStringLength: 4500, remarks: '' },
+    { towerId: 'T-101', attachmentName: 'Right phase', phase: 'C', attachmentType: 'Strain', xOffset: 7500, yOffset: 0, zAboveBase: 30000, absoluteX: null, absoluteY: null, absoluteZ: null, insulatorStringLength: 4200, remarks: '' },
+    { towerId: 'T-101', attachmentName: 'GW point 1', phase: 'Ground wire', attachmentType: 'Suspension', xOffset: -5500, yOffset: 0, zAboveBase: 48000, absoluteX: null, absoluteY: null, absoluteZ: null, insulatorStringLength: 500, remarks: '' },
+    { towerId: 'T-101', attachmentName: 'GW point 2', phase: 'Ground wire', attachmentType: 'Suspension', xOffset: 5500, yOffset: 0, zAboveBase: 48000, absoluteX: null, absoluteY: null, absoluteZ: null, insulatorStringLength: 500, remarks: '' },
+    { towerId: 'T-102', attachmentName: 'Left phase', phase: 'A', attachmentType: 'Suspension', xOffset: -7500, yOffset: 0, zAboveBase: 30000, absoluteX: null, absoluteY: null, absoluteZ: null, insulatorStringLength: 5000, remarks: '' },
+    { towerId: 'T-102', attachmentName: 'Center phase', phase: 'B', attachmentType: 'Suspension', xOffset: 0, yOffset: 0, zAboveBase: 37000, absoluteX: null, absoluteY: null, absoluteZ: null, insulatorStringLength: 5000, remarks: '' },
+    { towerId: 'T-102', attachmentName: 'Right phase', phase: 'C', attachmentType: 'Suspension', xOffset: 7500, yOffset: 0, zAboveBase: 30000, absoluteX: null, absoluteY: null, absoluteZ: null, insulatorStringLength: 5000, remarks: '' },
+    { towerId: 'T-102', attachmentName: 'GW point 1', phase: 'Ground wire', attachmentType: 'Suspension', xOffset: -5500, yOffset: 0, zAboveBase: 48000, absoluteX: null, absoluteY: null, absoluteZ: null, insulatorStringLength: 500, remarks: '' },
+    { towerId: 'T-102', attachmentName: 'GW point 2', phase: 'Ground wire', attachmentType: 'Suspension', xOffset: 5500, yOffset: 0, zAboveBase: 48000, absoluteX: null, absoluteY: null, absoluteZ: null, insulatorStringLength: 500, remarks: '' },
+    { towerId: 'T-103', attachmentName: 'Left phase', phase: 'A', attachmentType: 'Suspension', xOffset: -7500, yOffset: 0, zAboveBase: 30000, absoluteX: null, absoluteY: null, absoluteZ: null, insulatorStringLength: 5000, remarks: '' },
+    { towerId: 'T-103', attachmentName: 'Center phase', phase: 'B', attachmentType: 'Suspension', xOffset: 0, yOffset: 0, zAboveBase: 37000, absoluteX: null, absoluteY: null, absoluteZ: null, insulatorStringLength: 5000, remarks: '' },
+    { towerId: 'T-103', attachmentName: 'Right phase', phase: 'C', attachmentType: 'Suspension', xOffset: 7500, yOffset: 0, zAboveBase: 30000, absoluteX: null, absoluteY: null, absoluteZ: null, insulatorStringLength: 5000, remarks: '' },
+    { towerId: 'T-103', attachmentName: 'GW point 1', phase: 'Ground wire', attachmentType: 'Suspension', xOffset: -5500, yOffset: 0, zAboveBase: 48000, absoluteX: null, absoluteY: null, absoluteZ: null, insulatorStringLength: 500, remarks: '' },
+    { towerId: 'T-103', attachmentName: 'GW point 2', phase: 'Ground wire', attachmentType: 'Suspension', xOffset: 5500, yOffset: 0, zAboveBase: 48000, absoluteX: null, absoluteY: null, absoluteZ: null, insulatorStringLength: 500, remarks: '' },
+    { towerId: 'T-104', attachmentName: 'Left phase', phase: 'A', attachmentType: 'Strain', xOffset: -8000, yOffset: 0, zAboveBase: 33000, absoluteX: null, absoluteY: null, absoluteZ: null, insulatorStringLength: 4500, remarks: '' },
+    { towerId: 'T-104', attachmentName: 'Center phase', phase: 'B', attachmentType: 'Strain', xOffset: 0, yOffset: 0, zAboveBase: 40000, absoluteX: null, absoluteY: null, absoluteZ: null, insulatorStringLength: 4800, remarks: '' },
+    { towerId: 'T-104', attachmentName: 'Right phase', phase: 'C', attachmentType: 'Strain', xOffset: 8000, yOffset: 0, zAboveBase: 33000, absoluteX: null, absoluteY: null, absoluteZ: null, insulatorStringLength: 4500, remarks: '' },
+    { towerId: 'T-104', attachmentName: 'GW point 1', phase: 'Ground wire', attachmentType: 'Suspension', xOffset: -6000, yOffset: 0, zAboveBase: 51000, absoluteX: null, absoluteY: null, absoluteZ: null, insulatorStringLength: 500, remarks: '' },
+    { towerId: 'T-104', attachmentName: 'GW point 2', phase: 'Ground wire', attachmentType: 'Suspension', xOffset: 6000, yOffset: 0, zAboveBase: 51000, absoluteX: null, absoluteY: null, absoluteZ: null, insulatorStringLength: 500, remarks: '' },
+    { towerId: 'T-105', attachmentName: 'Left phase', phase: 'A', attachmentType: 'Suspension', xOffset: -7500, yOffset: 0, zAboveBase: 30000, absoluteX: null, absoluteY: null, absoluteZ: null, insulatorStringLength: 5000, remarks: '' },
+    { towerId: 'T-105', attachmentName: 'Center phase', phase: 'B', attachmentType: 'Suspension', xOffset: 0, yOffset: 0, zAboveBase: 37000, absoluteX: null, absoluteY: null, absoluteZ: null, insulatorStringLength: 5000, remarks: '' },
+    { towerId: 'T-105', attachmentName: 'Right phase', phase: 'C', attachmentType: 'Suspension', xOffset: 7500, yOffset: 0, zAboveBase: 30000, absoluteX: null, absoluteY: null, absoluteZ: null, insulatorStringLength: 5000, remarks: '' },
+    { towerId: 'T-105', attachmentName: 'GW point 1', phase: 'Ground wire', attachmentType: 'Suspension', xOffset: -5500, yOffset: 0, zAboveBase: 48000, absoluteX: null, absoluteY: null, absoluteZ: null, insulatorStringLength: 500, remarks: '' },
+    { towerId: 'T-105', attachmentName: 'GW point 2', phase: 'Ground wire', attachmentType: 'Suspension', xOffset: 5500, yOffset: 0, zAboveBase: 48000, absoluteX: null, absoluteY: null, absoluteZ: null, insulatorStringLength: 500, remarks: '' },
+    { towerId: 'T-106', attachmentName: 'Left phase', phase: 'A', attachmentType: 'Strain', xOffset: -7500, yOffset: 0, zAboveBase: 30000, absoluteX: null, absoluteY: null, absoluteZ: null, insulatorStringLength: 4200, remarks: '' },
+    { towerId: 'T-106', attachmentName: 'Center phase', phase: 'B', attachmentType: 'Strain', xOffset: 0, yOffset: 0, zAboveBase: 37000, absoluteX: null, absoluteY: null, absoluteZ: null, insulatorStringLength: 4500, remarks: '' },
+    { towerId: 'T-106', attachmentName: 'Right phase', phase: 'C', attachmentType: 'Strain', xOffset: 7500, yOffset: 0, zAboveBase: 30000, absoluteX: null, absoluteY: null, absoluteZ: null, insulatorStringLength: 4200, remarks: '' },
+    { towerId: 'T-106', attachmentName: 'GW point 1', phase: 'Ground wire', attachmentType: 'Suspension', xOffset: -5500, yOffset: 0, zAboveBase: 48000, absoluteX: null, absoluteY: null, absoluteZ: null, insulatorStringLength: 500, remarks: '' },
+    { towerId: 'T-106', attachmentName: 'GW point 2', phase: 'Ground wire', attachmentType: 'Suspension', xOffset: 5500, yOffset: 0, zAboveBase: 48000, absoluteX: null, absoluteY: null, absoluteZ: null, insulatorStringLength: 500, remarks: '' }
+  ],
+  insulatorsHardware: [
+    { towerId: 'T-101', stringPosition: 'A', stringType: 'Strain', insulatorType: 'Polymer', discModel: 'FXBW-240/100', discCount: 2, stringLength: 4200, yokeBallSocket: 'L-1240', suspensionClamp: '', deadEndClamp: 'NY-630/45', damperSpacer: 'FD-6x3', remarks: '' },
+    { towerId: 'T-101', stringPosition: 'B', stringType: 'Strain', insulatorType: 'Polymer', discModel: 'FXBW-240/100', discCount: 2, stringLength: 4500, yokeBallSocket: 'L-1240', suspensionClamp: '', deadEndClamp: 'NY-630/45', damperSpacer: 'FD-6x3', remarks: '' },
+    { towerId: 'T-101', stringPosition: 'C', stringType: 'Strain', insulatorType: 'Polymer', discModel: 'FXBW-240/100', discCount: 2, stringLength: 4200, yokeBallSocket: 'L-1240', suspensionClamp: '', deadEndClamp: 'NY-630/45', damperSpacer: 'FD-6x3', remarks: '' },
+    { towerId: 'T-101', stringPosition: 'GW 1', stringType: 'Suspension', insulatorType: 'Polymer', discModel: 'FXBW-35/70', discCount: 1, stringLength: 500, yokeBallSocket: '', suspensionClamp: 'XGU-2', deadEndClamp: '', damperSpacer: 'FD-4x1', remarks: '' },
+    { towerId: 'T-101', stringPosition: 'GW 2', stringType: 'Suspension', insulatorType: 'Polymer', discModel: 'FXBW-35/70', discCount: 1, stringLength: 500, yokeBallSocket: '', suspensionClamp: 'XGU-2', deadEndClamp: '', damperSpacer: 'FD-4x1', remarks: '' },
+    { towerId: 'T-102', stringPosition: 'A', stringType: 'Suspension', insulatorType: 'Glass', discModel: 'U70BS', discCount: 28, stringLength: 5000, yokeBallSocket: 'L-1040', suspensionClamp: 'CG-6', deadEndClamp: '', damperSpacer: 'FD-6x4', remarks: '' },
+    { towerId: 'T-102', stringPosition: 'B', stringType: 'Suspension', insulatorType: 'Glass', discModel: 'U70BS', discCount: 28, stringLength: 5000, yokeBallSocket: 'L-1040', suspensionClamp: 'CG-6', deadEndClamp: '', damperSpacer: 'FD-6x4', remarks: '' },
+    { towerId: 'T-102', stringPosition: 'C', stringType: 'Suspension', insulatorType: 'Glass', discModel: 'U70BS', discCount: 28, stringLength: 5000, yokeBallSocket: 'L-1040', suspensionClamp: 'CG-6', deadEndClamp: '', damperSpacer: 'FD-6x4', remarks: '' },
+    { towerId: 'T-103', stringPosition: 'A', stringType: 'Suspension', insulatorType: 'Glass', discModel: 'U70BS', discCount: 28, stringLength: 5000, yokeBallSocket: 'L-1040', suspensionClamp: 'CG-6', deadEndClamp: '', damperSpacer: 'FD-6x4', remarks: '' },
+    { towerId: 'T-103', stringPosition: 'B', stringType: 'Suspension', insulatorType: 'Glass', discModel: 'U70BS', discCount: 28, stringLength: 5000, yokeBallSocket: 'L-1040', suspensionClamp: 'CG-6', deadEndClamp: '', damperSpacer: 'FD-6x4', remarks: '' },
+    { towerId: 'T-103', stringPosition: 'C', stringType: 'Suspension', insulatorType: 'Glass', discModel: 'U70BS', discCount: 28, stringLength: 5000, yokeBallSocket: 'L-1040', suspensionClamp: 'CG-6', deadEndClamp: '', damperSpacer: 'FD-6x4', remarks: '' },
+    { towerId: 'T-104', stringPosition: 'A', stringType: 'Strain', insulatorType: 'Glass', discModel: 'U100BP', discCount: 30, stringLength: 4500, yokeBallSocket: 'L-1240', suspensionClamp: '', deadEndClamp: 'NY-630/45', damperSpacer: 'FD-6x3', remarks: '' },
+    { towerId: 'T-104', stringPosition: 'B', stringType: 'Strain', insulatorType: 'Glass', discModel: 'U100BP', discCount: 30, stringLength: 4800, yokeBallSocket: 'L-1240', suspensionClamp: '', deadEndClamp: 'NY-630/45', damperSpacer: 'FD-6x3', remarks: '' },
+    { towerId: 'T-104', stringPosition: 'C', stringType: 'Strain', insulatorType: 'Glass', discModel: 'U100BP', discCount: 30, stringLength: 4500, yokeBallSocket: 'L-1240', suspensionClamp: '', deadEndClamp: 'NY-630/45', damperSpacer: 'FD-6x3', remarks: '' },
+    { towerId: 'T-105', stringPosition: 'A', stringType: 'Suspension', insulatorType: 'Glass', discModel: 'U70BS', discCount: 28, stringLength: 5000, yokeBallSocket: 'L-1040', suspensionClamp: 'CG-6', deadEndClamp: '', damperSpacer: 'FD-6x4', remarks: '' },
+    { towerId: 'T-105', stringPosition: 'B', stringType: 'Suspension', insulatorType: 'Glass', discModel: 'U70BS', discCount: 28, stringLength: 5000, yokeBallSocket: 'L-1040', suspensionClamp: 'CG-6', deadEndClamp: '', damperSpacer: 'FD-6x4', remarks: '' },
+    { towerId: 'T-105', stringPosition: 'C', stringType: 'Suspension', insulatorType: 'Glass', discModel: 'U70BS', discCount: 28, stringLength: 5000, yokeBallSocket: 'L-1040', suspensionClamp: 'CG-6', deadEndClamp: '', damperSpacer: 'FD-6x4', remarks: '' },
+    { towerId: 'T-106', stringPosition: 'A', stringType: 'Strain', insulatorType: 'Polymer', discModel: 'FXBW-240/100', discCount: 2, stringLength: 4200, yokeBallSocket: 'L-1240', suspensionClamp: '', deadEndClamp: 'NY-630/45', damperSpacer: 'FD-6x3', remarks: '' },
+    { towerId: 'T-106', stringPosition: 'B', stringType: 'Strain', insulatorType: 'Polymer', discModel: 'FXBW-240/100', discCount: 2, stringLength: 4500, yokeBallSocket: 'L-1240', suspensionClamp: '', deadEndClamp: 'NY-630/45', damperSpacer: 'FD-6x3', remarks: '' },
+    { towerId: 'T-106', stringPosition: 'C', stringType: 'Strain', insulatorType: 'Polymer', discModel: 'FXBW-240/100', discCount: 2, stringLength: 4200, yokeBallSocket: 'L-1240', suspensionClamp: '', deadEndClamp: 'NY-630/45', damperSpacer: 'FD-6x3', remarks: '' }
+  ],
+  memberSpecs: [
+    { modelCode: '240KV-TG-22', memberCategory: 'Main leg', memberLocation: 'Lower section', specification: 'L140x90x10', materialGrade: 'ASTM A572 Gr.50', legOrientation: 'Compression', boltSpecification: 'M20', galvanizing: 'Hot-dip galvanized', quantity: 4, remarks: '' },
+    { modelCode: '240KV-TG-22', memberCategory: 'Main leg', memberLocation: 'Middle section', specification: 'L125x80x8', materialGrade: 'ASTM A572 Gr.50', legOrientation: 'Compression', boltSpecification: 'M20', galvanizing: 'Hot-dip galvanized', quantity: 4, remarks: '' },
+    { modelCode: '240KV-TG-22', memberCategory: 'Main leg', memberLocation: 'Upper section', specification: 'L110x70x7', materialGrade: 'ASTM A572 Gr.50', legOrientation: 'Compression', boltSpecification: 'M16', galvanizing: 'Hot-dip galvanized', quantity: 4, remarks: '' },
+    { modelCode: '240KV-TG-22', memberCategory: 'Bracing', memberLocation: 'Lower section', specification: 'L75x6', materialGrade: 'ASTM A36', legOrientation: 'Tension', boltSpecification: 'M16', galvanizing: 'Hot-dip galvanized', quantity: 8, remarks: '' },
+    { modelCode: '240KV-TG-22', memberCategory: 'Bracing', memberLocation: 'Middle section', specification: 'L65x6', materialGrade: 'ASTM A36', legOrientation: 'Tension', boltSpecification: 'M16', galvanizing: 'Hot-dip galvanized', quantity: 8, remarks: '' },
+    { modelCode: '240KV-TG-22', memberCategory: 'Bracing', memberLocation: 'Upper section', specification: 'L56x5', materialGrade: 'ASTM A36', legOrientation: 'Tension', boltSpecification: 'M16', galvanizing: 'Hot-dip galvanized', quantity: 8, remarks: '' },
+    { modelCode: '240KV-TG-22', memberCategory: 'Cross-bracing', memberLocation: 'Body cross-brace', specification: 'L56x5', materialGrade: 'ASTM A36', legOrientation: 'Tension', boltSpecification: 'M16', galvanizing: 'Hot-dip galvanized', quantity: 4, remarks: '' },
+    { modelCode: '240KV-TG-22', memberCategory: 'Auxiliary', memberLocation: 'Cross-arm main', specification: 'L110x70x7', materialGrade: 'ASTM A572 Gr.50', legOrientation: 'Compression', boltSpecification: 'M16', galvanizing: 'Hot-dip galvanized', quantity: 4, remarks: '' },
+    { modelCode: '240KV-TG-22', memberCategory: 'Auxiliary', memberLocation: 'Cross-arm bracing', specification: 'L56x5', materialGrade: 'ASTM A36', legOrientation: 'Tension', boltSpecification: 'M16', galvanizing: 'Hot-dip galvanized', quantity: 8, remarks: '' },
+    { modelCode: '240KV-TG-22', memberCategory: 'Auxiliary', memberLocation: 'GW support arm', specification: 'L75x6', materialGrade: 'ASTM A36', legOrientation: 'Compression', boltSpecification: 'M16', galvanizing: 'Hot-dip galvanized', quantity: 4, remarks: '' },
+    { modelCode: '240KV-AG-28', memberCategory: 'Main leg', memberLocation: 'Lower section', specification: 'L160x100x12', materialGrade: 'ASTM A588', legOrientation: 'Compression', boltSpecification: 'M20', galvanizing: 'Hot-dip galvanized', quantity: 4, remarks: '' },
+    { modelCode: '240KV-AG-28', memberCategory: 'Main leg', memberLocation: 'Middle section', specification: 'L140x90x10', materialGrade: 'ASTM A572 Gr.50', legOrientation: 'Compression', boltSpecification: 'M20', galvanizing: 'Hot-dip galvanized', quantity: 4, remarks: '' },
+    { modelCode: '240KV-AG-28', memberCategory: 'Main leg', memberLocation: 'Upper section', specification: 'L125x80x8', materialGrade: 'ASTM A572 Gr.50', legOrientation: 'Compression', boltSpecification: 'M16', galvanizing: 'Hot-dip galvanized', quantity: 4, remarks: '' },
+    { modelCode: '240KV-AG-28', memberCategory: 'Bracing', memberLocation: 'Lower section', specification: 'L80x7', materialGrade: 'ASTM A36', legOrientation: 'Tension', boltSpecification: 'M16', galvanizing: 'Hot-dip galvanized', quantity: 8, remarks: '' },
+    { modelCode: '240KV-AG-28', memberCategory: 'Bracing', memberLocation: 'Middle section', specification: 'L75x6', materialGrade: 'ASTM A36', legOrientation: 'Tension', boltSpecification: 'M16', galvanizing: 'Hot-dip galvanized', quantity: 8, remarks: '' },
+    { modelCode: '240KV-AG-28', memberCategory: 'Bracing', memberLocation: 'Upper section', specification: 'L65x6', materialGrade: 'ASTM A36', legOrientation: 'Tension', boltSpecification: 'M16', galvanizing: 'Hot-dip galvanized', quantity: 8, remarks: '' },
+    { modelCode: '240KV-AG-28', memberCategory: 'Cross-bracing', memberLocation: 'Body cross-brace', specification: 'L65x6', materialGrade: 'ASTM A36', legOrientation: 'Tension', boltSpecification: 'M16', galvanizing: 'Hot-dip galvanized', quantity: 4, remarks: '' },
+    { modelCode: '240KV-AG-28', memberCategory: 'Auxiliary', memberLocation: 'Cross-arm main', specification: 'L125x80x8', materialGrade: 'ASTM A572 Gr.50', legOrientation: 'Compression', boltSpecification: 'M16', galvanizing: 'Hot-dip galvanized', quantity: 4, remarks: '' },
+    { modelCode: '240KV-AG-28', memberCategory: 'Auxiliary', memberLocation: 'Cross-arm bracing', specification: 'L60x5', materialGrade: 'ASTM A36', legOrientation: 'Tension', boltSpecification: 'M16', galvanizing: 'Hot-dip galvanized', quantity: 8, remarks: '' },
+    { modelCode: '240KV-AG-28', memberCategory: 'Auxiliary', memberLocation: 'GW support arm', specification: 'L80x7', materialGrade: 'ASTM A36', legOrientation: 'Compression', boltSpecification: 'M16', galvanizing: 'Hot-dip galvanized', quantity: 4, remarks: '' },
+    { modelCode: '240KV-DE-1', memberCategory: 'Main leg', memberLocation: 'Lower section', specification: 'L160x100x12', materialGrade: 'ASTM A588', legOrientation: 'Compression', boltSpecification: 'M20', galvanizing: 'Hot-dip galvanized', quantity: 4, remarks: '' },
+    { modelCode: '240KV-DE-1', memberCategory: 'Main leg', memberLocation: 'Middle section', specification: 'L140x90x10', materialGrade: 'ASTM A572 Gr.50', legOrientation: 'Compression', boltSpecification: 'M20', galvanizing: 'Hot-dip galvanized', quantity: 4, remarks: '' },
+    { modelCode: '240KV-DE-1', memberCategory: 'Main leg', memberLocation: 'Upper section', specification: 'L125x80x8', materialGrade: 'ASTM A572 Gr.50', legOrientation: 'Compression', boltSpecification: 'M20', galvanizing: 'Hot-dip galvanized', quantity: 4, remarks: '' },
+    { modelCode: '240KV-DE-1', memberCategory: 'Bracing', memberLocation: 'Lower section', specification: 'L80x7', materialGrade: 'ASTM A36', legOrientation: 'Tension', boltSpecification: 'M16', galvanizing: 'Hot-dip galvanized', quantity: 8, remarks: '' },
+    { modelCode: '240KV-DE-1', memberCategory: 'Bracing', memberLocation: 'Middle section', specification: 'L75x6', materialGrade: 'ASTM A36', legOrientation: 'Tension', boltSpecification: 'M16', galvanizing: 'Hot-dip galvanized', quantity: 8, remarks: '' },
+    { modelCode: '240KV-DE-1', memberCategory: 'Bracing', memberLocation: 'Upper section', specification: 'L65x6', materialGrade: 'ASTM A36', legOrientation: 'Tension', boltSpecification: 'M16', galvanizing: 'Hot-dip galvanized', quantity: 8, remarks: '' },
+    { modelCode: '240KV-DE-1', memberCategory: 'Cross-bracing', memberLocation: 'Body cross-brace', specification: 'L65x6', materialGrade: 'ASTM A36', legOrientation: 'Tension', boltSpecification: 'M16', galvanizing: 'Hot-dip galvanized', quantity: 4, remarks: '' },
+    { modelCode: '240KV-DE-1', memberCategory: 'Auxiliary', memberLocation: 'Cross-arm main', specification: 'L125x80x8', materialGrade: 'ASTM A572 Gr.50', legOrientation: 'Compression', boltSpecification: 'M16', galvanizing: 'Hot-dip galvanized', quantity: 4, remarks: '' },
+    { modelCode: '240KV-DE-1', memberCategory: 'Auxiliary', memberLocation: 'Cross-arm bracing', specification: 'L60x5', materialGrade: 'ASTM A36', legOrientation: 'Tension', boltSpecification: 'M16', galvanizing: 'Hot-dip galvanized', quantity: 8, remarks: '' },
+    { modelCode: '240KV-DE-1', memberCategory: 'Auxiliary', memberLocation: 'GW support arm', specification: 'L80x7', materialGrade: 'ASTM A36', legOrientation: 'Compression', boltSpecification: 'M16', galvanizing: 'Hot-dip galvanized', quantity: 4, remarks: '' }
+  ],
+  foundations: [
+    { towerId: 'T-101', leg: 'Leg A', foundationType: 'Stepped', foundationDepth: 3.2, foundationSize: '3200x3200x2200', anchorBoltSpec: '4-3/4"', anchorBoltSpacing: 3200, basePlateElevation: 1485.20, concreteGrade: 'CSA A23.1 25MPa', geotechnicalCondition: 'Soil', remarks: '' },
+    { towerId: 'T-101', leg: 'Leg B', foundationType: 'Stepped', foundationDepth: 3.2, foundationSize: '3200x3200x2200', anchorBoltSpec: '4-3/4"', anchorBoltSpacing: 3200, basePlateElevation: 1485.20, concreteGrade: 'CSA A23.1 25MPa', geotechnicalCondition: 'Soil', remarks: '' },
+    { towerId: 'T-101', leg: 'Leg C', foundationType: 'Stepped', foundationDepth: 3.2, foundationSize: '3200x3200x2200', anchorBoltSpec: '4-3/4"', anchorBoltSpacing: 3200, basePlateElevation: 1485.20, concreteGrade: 'CSA A23.1 25MPa', geotechnicalCondition: 'Soil', remarks: '' },
+    { towerId: 'T-101', leg: 'Leg D', foundationType: 'Stepped', foundationDepth: 3.2, foundationSize: '3200x3200x2200', anchorBoltSpec: '4-3/4"', anchorBoltSpacing: 3200, basePlateElevation: 1485.20, concreteGrade: 'CSA A23.1 25MPa', geotechnicalCondition: 'Soil', remarks: '' },
+    { towerId: 'T-102', leg: 'Leg A', foundationType: 'Drilled shaft', foundationDepth: 3.5, foundationSize: '1800x3500', anchorBoltSpec: '4-3/4"', anchorBoltSpacing: 2800, basePlateElevation: 1522.50, concreteGrade: 'CSA A23.1 25MPa', geotechnicalCondition: 'Rock', remarks: '' },
+    { towerId: 'T-102', leg: 'Leg B', foundationType: 'Drilled shaft', foundationDepth: 3.5, foundationSize: '1800x3500', anchorBoltSpec: '4-3/4"', anchorBoltSpacing: 2800, basePlateElevation: 1522.50, concreteGrade: 'CSA A23.1 25MPa', geotechnicalCondition: 'Rock', remarks: '' },
+    { towerId: 'T-102', leg: 'Leg C', foundationType: 'Drilled shaft', foundationDepth: 3.5, foundationSize: '1800x3500', anchorBoltSpec: '4-3/4"', anchorBoltSpacing: 2800, basePlateElevation: 1522.50, concreteGrade: 'CSA A23.1 25MPa', geotechnicalCondition: 'Rock', remarks: '' },
+    { towerId: 'T-102', leg: 'Leg D', foundationType: 'Drilled shaft', foundationDepth: 3.5, foundationSize: '1800x3500', anchorBoltSpec: '4-3/4"', anchorBoltSpacing: 2800, basePlateElevation: 1522.50, concreteGrade: 'CSA A23.1 25MPa', geotechnicalCondition: 'Rock', remarks: '' },
+    { towerId: 'T-103', leg: 'Leg A', foundationType: 'Drilled shaft', foundationDepth: 3.5, foundationSize: '1800x3500', anchorBoltSpec: '4-3/4"', anchorBoltSpacing: 2800, basePlateElevation: 1548.80, concreteGrade: 'CSA A23.1 25MPa', geotechnicalCondition: 'Rock', remarks: '' },
+    { towerId: 'T-103', leg: 'Leg B', foundationType: 'Drilled shaft', foundationDepth: 3.5, foundationSize: '1800x3500', anchorBoltSpec: '4-3/4"', anchorBoltSpacing: 2800, basePlateElevation: 1548.80, concreteGrade: 'CSA A23.1 25MPa', geotechnicalCondition: 'Rock', remarks: '' },
+    { towerId: 'T-103', leg: 'Leg C', foundationType: 'Drilled shaft', foundationDepth: 3.5, foundationSize: '1800x3500', anchorBoltSpec: '4-3/4"', anchorBoltSpacing: 2800, basePlateElevation: 1548.80, concreteGrade: 'CSA A23.1 25MPa', geotechnicalCondition: 'Rock', remarks: '' },
+    { towerId: 'T-103', leg: 'Leg D', foundationType: 'Drilled shaft', foundationDepth: 3.5, foundationSize: '1800x3500', anchorBoltSpec: '4-3/4"', anchorBoltSpacing: 2800, basePlateElevation: 1548.80, concreteGrade: 'CSA A23.1 25MPa', geotechnicalCondition: 'Rock', remarks: '' },
+    { towerId: 'T-104', leg: 'Leg A', foundationType: 'Pile', foundationDepth: 4.5, foundationSize: '1400x5500', anchorBoltSpec: '4-7/8"', anchorBoltSpacing: 3000, basePlateElevation: 1575.40, concreteGrade: 'CSA A23.1 30MPa', geotechnicalCondition: 'Soil', remarks: 'Angle tower reinforced' },
+    { towerId: 'T-104', leg: 'Leg B', foundationType: 'Pile', foundationDepth: 4.5, foundationSize: '1400x5500', anchorBoltSpec: '4-7/8"', anchorBoltSpacing: 3000, basePlateElevation: 1575.40, concreteGrade: 'CSA A23.1 30MPa', geotechnicalCondition: 'Soil', remarks: 'Angle tower reinforced' },
+    { towerId: 'T-104', leg: 'Leg C', foundationType: 'Pile', foundationDepth: 4.5, foundationSize: '1400x5500', anchorBoltSpec: '4-7/8"', anchorBoltSpacing: 3000, basePlateElevation: 1575.40, concreteGrade: 'CSA A23.1 30MPa', geotechnicalCondition: 'Soil', remarks: 'Angle tower reinforced' },
+    { towerId: 'T-104', leg: 'Leg D', foundationType: 'Pile', foundationDepth: 4.5, foundationSize: '1400x5500', anchorBoltSpec: '4-7/8"', anchorBoltSpacing: 3000, basePlateElevation: 1575.40, concreteGrade: 'CSA A23.1 30MPa', geotechnicalCondition: 'Soil', remarks: 'Angle tower reinforced' },
+    { towerId: 'T-105', leg: 'Leg A', foundationType: 'Drilled shaft', foundationDepth: 3.5, foundationSize: '1800x3500', anchorBoltSpec: '4-3/4"', anchorBoltSpacing: 2800, basePlateElevation: 1610.60, concreteGrade: 'CSA A23.1 25MPa', geotechnicalCondition: 'Rock', remarks: '' },
+    { towerId: 'T-105', leg: 'Leg B', foundationType: 'Drilled shaft', foundationDepth: 3.5, foundationSize: '1800x3500', anchorBoltSpec: '4-3/4"', anchorBoltSpacing: 2800, basePlateElevation: 1610.60, concreteGrade: 'CSA A23.1 25MPa', geotechnicalCondition: 'Rock', remarks: '' },
+    { towerId: 'T-105', leg: 'Leg C', foundationType: 'Drilled shaft', foundationDepth: 3.5, foundationSize: '1800x3500', anchorBoltSpec: '4-3/4"', anchorBoltSpacing: 2800, basePlateElevation: 1610.60, concreteGrade: 'CSA A23.1 25MPa', geotechnicalCondition: 'Rock', remarks: '' },
+    { towerId: 'T-105', leg: 'Leg D', foundationType: 'Drilled shaft', foundationDepth: 3.5, foundationSize: '1800x3500', anchorBoltSpec: '4-3/4"', anchorBoltSpacing: 2800, basePlateElevation: 1610.60, concreteGrade: 'CSA A23.1 25MPa', geotechnicalCondition: 'Rock', remarks: '' },
+    { towerId: 'T-106', leg: 'Leg A', foundationType: 'Stepped', foundationDepth: 3.2, foundationSize: '3200x3200x2200', anchorBoltSpec: '4-3/4"', anchorBoltSpacing: 3200, basePlateElevation: 1635.30, concreteGrade: 'CSA A23.1 25MPa', geotechnicalCondition: 'Soil', remarks: '' },
+    { towerId: 'T-106', leg: 'Leg B', foundationType: 'Stepped', foundationDepth: 3.2, foundationSize: '3200x3200x2200', anchorBoltSpec: '4-3/4"', anchorBoltSpacing: 3200, basePlateElevation: 1635.30, concreteGrade: 'CSA A23.1 25MPa', geotechnicalCondition: 'Soil', remarks: '' },
+    { towerId: 'T-106', leg: 'Leg C', foundationType: 'Stepped', foundationDepth: 3.2, foundationSize: '3200x3200x2200', anchorBoltSpec: '4-3/4"', anchorBoltSpacing: 3200, basePlateElevation: 1635.30, concreteGrade: 'CSA A23.1 25MPa', geotechnicalCondition: 'Soil', remarks: '' },
+    { towerId: 'T-106', leg: 'Leg D', foundationType: 'Stepped', foundationDepth: 3.2, foundationSize: '3200x3200x2200', anchorBoltSpec: '4-3/4"', anchorBoltSpacing: 3200, basePlateElevation: 1635.30, concreteGrade: 'CSA A23.1 25MPa', geotechnicalCondition: 'Soil', remarks: '' }
+  ],
+  weatherCases: [
+    { sectionLine: 'Alberta-240 T-101 to T-106', designTemperature: '+40/-40', maxWindSpeed: 30.0, iceThickness: 12, averageAnnualTension: 20000, lightningOvervoltageCase: '+15C/240kV', switchingOvervoltageCase: '+20C/180kV', seismicDesignCategory: 'NBCC 0.15g', correspondingSpanCaseId: 'WG-01', remarks: 'Typical case' },
+    { sectionLine: 'Alberta-240 T-101 to T-106', designTemperature: '-40/0', maxWindSpeed: 25.0, iceThickness: 25, averageAnnualTension: 23000, lightningOvervoltageCase: '+5C/240kV', switchingOvervoltageCase: '+15C/180kV', seismicDesignCategory: 'NBCC 0.15g', correspondingSpanCaseId: 'WG-02', remarks: 'Heavy ice case' },
+    { sectionLine: 'Alberta-240 T-101 to T-106', designTemperature: '+40/0', maxWindSpeed: 35.0, iceThickness: 0, averageAnnualTension: 25000, lightningOvervoltageCase: '+15C/240kV', switchingOvervoltageCase: '+20C/180kV', seismicDesignCategory: 'NBCC 0.15g', correspondingSpanCaseId: 'WG-03', remarks: 'High wind case' }
+  ],
+  crossingsTerrain: [
+    { crossingId: 'CR-01', type: 'Road', nameDescription: 'Highway 11', crossingPointX: -115.866, crossingPointY: 52.4010, objectTopElevation: 1500.00, crossingAngle: 90, requiredClearance: 7.0, towerIdSpan: 'T-102 to T-103', terrainDataType: 'DEM', dataFilePath: '/data/dem/t102t103.tif', geologicalInfo: 'Soil', remarks: '' },
+    { crossingId: 'CR-02', type: 'River', nameDescription: 'North Saskatchewan River', crossingPointX: -115.883, crossingPointY: 52.4125, objectTopElevation: 1495.50, crossingAngle: 75, requiredClearance: 6.0, towerIdSpan: 'T-103 to T-104', terrainDataType: 'DEM', dataFilePath: '/data/dem/t103t104.tif', geologicalInfo: 'Hydrological', remarks: '' },
+    { crossingId: 'CR-03', type: 'Power line', nameDescription: '25 kV distribution', crossingPointX: -115.901, crossingPointY: 52.4245, objectTopElevation: 1572.00, crossingAngle: 60, requiredClearance: 4.0, towerIdSpan: 'T-104 to T-105', terrainDataType: 'Cross-section', dataFilePath: '/data/section/t104t105.dwg', geologicalInfo: 'Soil', remarks: '' },
+    { crossingId: 'CR-04', type: 'Building', nameDescription: 'Cabin (2-story)', crossingPointX: -115.919, crossingPointY: 52.4370, objectTopElevation: 1608.50, crossingAngle: 80, requiredClearance: 5.0, towerIdSpan: 'T-105 to T-106', terrainDataType: 'Point cloud', dataFilePath: '/data/cloud/t105t106.laz', geologicalInfo: 'Soil', remarks: '' },
+    { crossingId: 'CR-05', type: 'Tree', nameDescription: 'Coniferous forest (18m)', crossingPointX: -115.874, crossingPointY: 52.4070, objectTopElevation: 1548.00, crossingAngle: 90, requiredClearance: 4.0, towerIdSpan: 'T-103', terrainDataType: 'DEM', dataFilePath: '/data/dem/t103.tif', geologicalInfo: 'Soil', remarks: '' }
+  ]
+};
+
+// ═══════════════════════════════════════════════════════════════
+// Materials & 3D scene setup
+// ═══════════════════════════════════════════════════════════════
+
+// ── Three.js materials (shared across all towers) ──
+
+// ═══════════════════════════════════════════════════════════════
+// Left panel — CSV dataset browser
+// ═══════════════════════════════════════════════════════════════
+const csvList = document.getElementById('csvList');
+const dataTable = document.getElementById('dataTable');
+
+// ═══════════════════════════════════════════════════════════════
+// Left panel — CSV dataset browser
+// ═══════════════════════════════════════════════════════════════
+const dataTitle = document.getElementById('dataTitle');
+let activeCSV = null;
+
+function buildCsvList(csvDatas) {
+  csvList.innerHTML = '';
+  Object.entries(csvDatas).forEach(([name, data]) => {
+    const item = document.createElement('div');
+    item.className = 'csv-item';
+    item.innerHTML = `<div class="csv-name">${name}</div><div class="csv-desc">${data.desc}</div><div class="csv-count">${data.rows.length} records</div>`;
+    item.onclick = () => {
+      document.querySelectorAll('.csv-item').forEach(e => e.classList.remove('active'));
+      item.classList.add('active');
+      activeCSV = name;
+      dataTitle.textContent = name + ' — ' + data.rows.length + ' records';
+      let html = '<thead><tr>';
+      data.headers.forEach(h => html += `<th>${h}</th>`);
+      html += '</tr></thead><tbody>';
+      data.rows.forEach(row => {
+        html += '<tr>';
+        row.forEach(v => html += `<td>${v}</td>`);
+        html += '</tr>';
+      });
+      html += '</tbody>';
+      dataTable.innerHTML = html;
+    };
+    csvList.appendChild(item);
+  });
+  csvList.firstChild?.click();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Right panel — tower selector
+// ═══════════════════════════════════════════════════════════════
+const towerSelector = document.getElementById('towerSelector');
+const towerInfo = document.getElementById('towerInfo');
+let currentTowerIdx = 0;
+
+function buildTowerSelector(towers) {
+  towerSelector.innerHTML = '';
+  towers.forEach((t, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'tower-btn' + (i === 0 ? ' active' : '');
+    btn.textContent = t.id;
+    btn.onclick = () => {
+      document.querySelectorAll('.tower-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentTowerIdx = i;
+      renderTower(t);
+      showTowerInfo(t);
+      if (window._map) window._map.flyTo({ center: [t.lon, t.lat], zoom: 14, pitch: 50, duration: 1200 });
+    };
+    towerSelector.appendChild(btn);
+  });
+}
+
+function showTowerInfo(t) {
+  towerInfo.innerHTML = `
+    <div class="info-row"><span class="label">Tower ID</span><span class="value">${t.id}</span></div>
+    <div class="info-row"><span class="label">Tower Type</span><span class="value">${t.type}</span></div>
+    <div class="info-row"><span class="label">Longitude</span><span class="value">${t.lon}°</span></div>
+    <div class="info-row"><span class="label">Latitude</span><span class="value">${t.lat}°</span></div>
+    <div class="info-row"><span class="label">Base Elevation</span><span class="value">${t.elev} m</span></div>
+    <div class="info-row"><span class="label">Model Code</span><span class="value">${t.model}</span></div>
+    <div class="info-row"><span class="label">Attachment Height</span><span class="value">${(t.height-15).toFixed(1)} m</span></div>
+    <div class="info-row"><span class="label">Overall Height</span><span class="value">${t.height.toFixed(1)} m</span></div>
+    <div class="info-row"><span class="label">Base Width</span><span class="value">${t.baseWidth.toFixed(1)} m</span></div>
+    <div class="info-row"><span class="label">Top Width</span><span class="value">${(t.topWidth*1000).toFixed(0)} mm</span></div>
+    <div class="info-row"><span class="label">Taper Ratio</span><span class="value">${t.taper}</span></div>
+    <div class="info-row"><span class="label">Line Angle</span><span class="value">${t.angle}°</span></div>
+    <div class="info-row"><span class="label">Cross-arm Azimuth</span><span class="value">${t.azimuth}°</span></div>
+    <div class="info-row"><span class="label">Phase Arrangement</span><span class="value">${t.phase}</span></div>
+    <div class="info-row"><span class="label">Head Type</span><span class="value">${t.headType}</span></div>
+  `;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Three.js 3D Tower Rendering — GPU Accelerated
+// ═══════════════════════════════════════════════════════════════
+const threeContainer = document.getElementById('three-canvas');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a1520);
+scene.fog = new THREE.Fog(0x0a1520, 100, 300);
+
+// Container size protection
+let cw = threeContainer.clientWidth || 480;
+let ch = threeContainer.clientHeight || 500;
+
+const camera = new THREE.PerspectiveCamera(50, cw / ch, 0.1, 500);
+camera.position.set(55, 45, 55);
+
+// GPU-accelerated renderer — forces discrete GPU
+const renderer = new THREE.WebGLRenderer({
+  antialias: true,
+  powerPreference: 'high-performance',
+  stencil: false,
+  depth: true,
+});
+renderer.setSize(cw, ch);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+threeContainer.appendChild(renderer.domElement);
+renderer.domElement.style.width = '100%';
+renderer.domElement.style.height = '100%';
+renderer.domElement.style.display = 'block';
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 15;
+controls.maxDistance = 180;
+controls.maxPolarAngle = Math.PI / 2.1;
+controls.target.set(0, 20, 0);
+
+// Lights
+const ambient = new THREE.AmbientLight(0x6080a0, 0.6);
+scene.add(ambient);
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+dirLight.position.set(50, 80, 30);
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.set(2048, 2048);
+dirLight.shadow.camera.left = -80;
+dirLight.shadow.camera.right = 80;
+dirLight.shadow.camera.top = 80;
+dirLight.shadow.camera.bottom = -80;
+scene.add(dirLight);
+const hemiLight = new THREE.HemisphereLight(0x6080ff, 0x223344, 0.4);
+scene.add(hemiLight);
+
+// Ground grid
+const gridHelper = new THREE.GridHelper(100, 20, 0x1a3a5a, 0x0d1e2e);
+scene.add(gridHelper);
+const groundGeo = new THREE.PlaneGeometry(200, 200);
+const groundMat = new THREE.MeshStandardMaterial({ color: 0x0a1a2a, roughness: 0.9 });
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = -0.1;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// Mountain silhouette — Alberta mountain backdrop
+const mountainGroup = new THREE.Group();
+for (let i = 0; i < 5; i++) {
+  const mGeo = new THREE.ConeGeometry(15 + Math.random() * 10, 25 + Math.random() * 15, 4);
+  const mMat = new THREE.MeshStandardMaterial({ color: 0x1a2a3a, roughness: 0.95, flatShading: true });
+  const mountain = new THREE.Mesh(mGeo, mMat);
+  mountain.position.set(-60 + i * 25, 5 + Math.random() * 5, -50 - Math.random() * 10);
+  mountain.rotation.y = Math.random() * Math.PI;
+  mountain.receiveShadow = true;
+  mountainGroup.add(mountain);
+}
+scene.add(mountainGroup);
+
+// Materials
+const matSteel = new THREE.MeshStandardMaterial({ color: 0x8a9ba8, metalness: 0.7, roughness: 0.4 });
+const matSteelDark = new THREE.MeshStandardMaterial({ color: 0x4a5a68, metalness: 0.6, roughness: 0.5 });
+const matInsulator = new THREE.MeshStandardMaterial({ color: 0xe0e0e0, roughness: 0.2, metalness: 0.1 });
+const matConductor = new THREE.MeshStandardMaterial({ color: 0x556677, metalness: 0.5, roughness: 0.6 });
+const matGround = new THREE.MeshStandardMaterial({ color: 0x555555, metalness: 0.6, roughness: 0.5 });
+const matFoundation = new THREE.MeshStandardMaterial({ color: 0x3a3a3a, roughness: 0.9 });
+const matHighlight = new THREE.MeshStandardMaterial({ color: 0x4ade80, emissive: 0x224422, metalness: 0.3, roughness: 0.5 });
+
+// Tower group container
+let towerGroup = new THREE.Group();
+scene.add(towerGroup);
+
+// ═══════════════════════════════════════════════════════════════
+// Parametric tower modelling function
+// ═══════════════════════════════════════════════════════════════
+function createLatticeMember(x1, y1, z1, x2, y2, z2, thickness, material) {
+  const dx = x2 - x1, dy = y2 - y1, dz = z2 - z1;
+  const length = Math.sqrt(dx*dx + dy*dy + dz*dz);
+  if (length < 0.01) return null;
+  const geo = new THREE.CylinderGeometry(thickness, thickness, length, 6);
+  const mesh = new THREE.Mesh(geo, material);
+  mesh.position.set((x1+x2)/2, (y1+y2)/2, (z1+z2)/2);
+  const dir = new THREE.Vector3(dx, dy, dz).normalize();
+  const up = new THREE.Vector3(0, 1, 0);
+  const quat = new THREE.Quaternion().setFromUnitVectors(up, dir);
+  mesh.quaternion.copy(quat);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+function buildTower(tower) {
+  while (towerGroup.children.length) towerGroup.remove(towerGroup.children[0]);
+  const g = new THREE.Group();
+
+  const H = tower.height;
+  const bw = tower.baseWidth;
+  const tw = tower.topWidth;
+  const segs = 5;
+  const segH = H / segs;
+  const taperRatio = tw / bw;
+
+  // 4 main legs — tapered from base to top
+  for (let s = 0; s < segs; s++) {
+    const y1 = s * segH;
+    const y2 = (s + 1) * segH;
+    const w1 = bw * (1 - (1 - taperRatio) * s / segs) / 2;
+    const w2 = bw * (1 - (1 - taperRatio) * (s + 1) / segs) / 2;
+    const thick = 0.15 * (1 - s / segs * 0.3);
+
+    const corners = [[1,1],[-1,1],[-1,-1],[1,-1]];
+    corners.forEach(([sx, sz]) => {
+      const m = createLatticeMember(sx*w1, y1, sz*w1, sx*w2, y2, sz*w2, thick, matSteel);
+      if (m) g.add(m);
+    });
+
+    // Diagonal bracing — X pattern on 4 faces
+    const corners2 = [[w1,w1],[-w1,w1],[-w1,-w1],[w1,-w1]];
+    const corners3 = [[w2,w2],[-w2,w2],[-w2,-w2],[w2,-w2]];
+    const brackThick = thick * 0.6;
+    for (let f = 0; f < 4; f++) {
+      const a1 = corners2[f], a2 = corners2[(f+1)%4];
+      const b1 = corners3[f], b2 = corners3[(f+1)%4];
+      const d1 = createLatticeMember(a1[0], y1, a1[1], b2[0], y2, b2[1], brackThick, matSteelDark);
+      const d2 = createLatticeMember(a2[0], y1, a2[1], b1[0], y2, b1[1], brackThick, matSteelDark);
+      if (d1) g.add(d1);
+      if (d2) g.add(d2);
+      const h1 = createLatticeMember(b1[0], y2, b1[1], b2[0], y2, b2[1], brackThick, matSteelDark);
+      if (h1) g.add(h1);
+    }
+  }
+
+  // Cross arms — cat-head type: 3 levels
+  const armLevels = [
+    { y: H * 0.55, len: bw * 0.55, type: 'phase' },
+    { y: H * 0.70, len: bw * 0.40, type: 'phase' },
+    { y: H * 0.92, len: bw * 0.35, type: 'ground' },
+  ];
+
+  armLevels.forEach(arm => {
+    for (let dir of [1, -1]) {
+      const ub = createLatticeMember(0, arm.y, dir * tw/2, 0, arm.y, dir * (tw/2 + arm.len), 0.12, matSteel);
+      if (ub) g.add(ub);
+      const lb = createLatticeMember(0, arm.y - 1.5, dir * tw/2, 0, arm.y - 1.5, dir * (tw/2 + arm.len), 0.10, matSteel);
+      if (lb) g.add(lb);
+      const dg = createLatticeMember(0, arm.y, dir * tw/2, 0, arm.y - 1.5, dir * (tw/2 + arm.len), 0.08, matSteelDark);
+      if (dg) g.add(dg);
+      for (let p = 0.3; p <= 1.0; p += 0.35) {
+        const v = createLatticeMember(0, arm.y, dir * (tw/2 + arm.len * p), 0, arm.y - 1.5, dir * (tw/2 + arm.len * p), 0.06, matSteelDark);
+        if (v) g.add(v);
+      }
+    }
+    const cc1 = createLatticeMember(0, arm.y, tw/2, 0, arm.y, -tw/2, 0.08, matSteelDark);
+    if (cc1) g.add(cc1);
+    const cc2 = createLatticeMember(0, arm.y - 1.5, tw/2, 0, arm.y - 1.5, -tw/2, 0.06, matSteelDark);
+    if (cc2) g.add(cc2);
+  });
+
+  // Insulator strings
+  const hangPoints = [
+    { y: armLevels[0].y, z: tw/2 + armLevels[0].len, phase: 'A', type: tower.type === 'Tangent' ? 'suspension' : 'tension' },
+    { y: armLevels[1].y, z: 0, phase: 'B', type: tower.type === 'Tangent' ? 'suspension' : 'tension' },
+    { y: armLevels[0].y, z: -(tw/2 + armLevels[0].len), phase: 'C', type: tower.type === 'Tangent' ? 'suspension' : 'tension' },
+  ];
+
+  hangPoints.forEach(hp => {
+    const insLen = hp.type === 'suspension' ? 5.0 : 4.5;
+    const discCount = hp.type === 'suspension' ? 8 : 6;
+    for (let d = 0; d < discCount; d++) {
+      const discGeo = new THREE.CylinderGeometry(0.25, 0.25, 0.15, 12);
+      const disc = new THREE.Mesh(discGeo, matInsulator);
+      disc.position.set(0, hp.y - d * 0.6 - 0.3, hp.z);
+      disc.castShadow = true;
+      g.add(disc);
+    }
+    const conGeo = new THREE.SphereGeometry(0.2, 8, 8);
+    const con = new THREE.Mesh(conGeo, matConductor);
+    con.position.set(0, hp.y - discCount * 0.6, hp.z);
+    g.add(con);
+  });
+
+  // Ground wire insulators
+  for (let dir of [1, -1]) {
+    const gInsGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.5, 8);
+    const gIns = new THREE.Mesh(gInsGeo, matInsulator);
+    gIns.position.set(0, armLevels[2].y - 0.25, dir * (tw/2 + armLevels[2].len));
+    g.add(gIns);
+  }
+
+  // Foundation
+  const foundGeo = new THREE.BoxGeometry(bw + 2, 2.5, bw + 2);
+  const foundation = new THREE.Mesh(foundGeo, matFoundation);
+  foundation.position.y = -1.25;
+  foundation.castShadow = true;
+  foundation.receiveShadow = true;
+  g.add(foundation);
+
+  // Foundation legs (4 piers)
+  const corners = [[1,1],[-1,1],[-1,-1],[1,-1]];
+  corners.forEach(([sx, sz]) => {
+    const pierGeo = new THREE.CylinderGeometry(0.5, 0.6, 3.5, 12);
+    const pier = new THREE.Mesh(pierGeo, matFoundation);
+    pier.position.set(sx * bw/2 * 0.8, -1.75, sz * bw/2 * 0.8);
+    pier.castShadow = true;
+    g.add(pier);
+  });
+
+  // Conductors — catenary curves
+  const neighborOffsets = [
+    { dx: 30, dz: 30, label: '→ next' },
+    { dx: -30, dz: -30, label: '← prev' },
+  ];
+
+  ['A', 'B', 'C'].forEach((phase, pi) => {
+    const hp = hangPoints[pi];
+    neighborOffsets.forEach(n => {
+      const startX = 0, startZ = hp.z;
+      const endX = n.dx, endZ = hp.z + n.dz;
+      const dist = Math.sqrt(n.dx*n.dx + n.dz*n.dz);
+      const sag = dist * 0.012;
+      const pts = [];
+      for (let k = 0; k <= 30; k++) {
+        const t = k / 30;
+        const x = startX + (endX - startX) * t;
+        const z = startZ + (endZ - startZ) * t;
+        const y = hp.y - sag * 4 * t * (1 - t);
+        pts.push(new THREE.Vector3(x, y, z));
+      }
+      // 4-bundle conductor
+      const bundleOffsets = [[0.225,0.225],[-0.225,-0.225],[0.225,-0.225],[-0.225,0.225]];
+      bundleOffsets.forEach(bo => {
+        const offsetPts = pts.map(p => new THREE.Vector3(p.x + bo[0]*0.3, p.y, p.z + bo[1]*0.3));
+        const curve = new THREE.CatmullRomCurve3(offsetPts);
+        const condGeo = new THREE.TubeGeometry(curve, 30, 0.04, 6, false);
+        const cond = new THREE.Mesh(condGeo, matConductor);
+        cond.castShadow = true;
+        g.add(cond);
+      });
+    });
+  });
+
+  // Ground wires
+  const gwY = armLevels[2].y;
+  for (let dir of [1, -1]) {
+    const gwZ = dir * (tw/2 + armLevels[2].len);
+    neighborOffsets.forEach(n => {
+      const dist = Math.sqrt(n.dx*n.dx + n.dz*n.dz);
+      const sag = dist * 0.01;
+      const pts = [];
+      for (let k = 0; k <= 30; k++) {
+        const t = k / 30;
+        const x = 0 + n.dx * t;
+        const z = gwZ + n.dz * t;
+        const y = gwY - sag * 4 * t * (1 - t);
+        pts.push(new THREE.Vector3(x, y, z));
+      }
+      const curve = new THREE.CatmullRomCurve3(pts);
+      const gwGeo = new THREE.TubeGeometry(curve, 30, 0.03, 6, false);
+      const gw = new THREE.Mesh(gwGeo, matGround);
+      g.add(gw);
+    });
+  }
+
+  // Tower label
+  const labelCanvas = document.createElement('canvas');
+  labelCanvas.width = 256; labelCanvas.height = 128;
+  const ctx = labelCanvas.getContext('2d');
+  ctx.fillStyle = 'rgba(10,21,32,0.85)';
+  ctx.fillRect(0, 0, 256, 128);
+  ctx.strokeStyle = '#60a5fa';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(1, 1, 254, 126);
+  ctx.fillStyle = '#60a5fa';
+  ctx.font = 'bold 32px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText(tower.id, 128, 45);
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = '18px Arial';
+  ctx.fillText(tower.type + ' · ' + tower.model, 128, 75);
+  ctx.fillText('Att ' + (tower.height-15).toFixed(0) + 'm · H ' + tower.height.toFixed(0) + 'm', 128, 100);
+
+  const labelTex = new THREE.CanvasTexture(labelCanvas);
+  const labelMat = new THREE.SpriteMaterial({ map: labelTex, transparent: true });
+  const labelSprite = new THREE.Sprite(labelMat);
+  labelSprite.scale.set(15, 7.5, 1);
+  labelSprite.position.set(0, H + 8, 0);
+  g.add(labelSprite);
+
+  // Compass indicator
+  const compassGeo = new THREE.ConeGeometry(0.3, 1, 4);
+  const compass = new THREE.Mesh(compassGeo, matHighlight);
+  compass.position.set(0, H + 2, 0);
+  g.add(compass);
+
+  // Apply tower azimuth rotation
+  g.rotation.y = -tower.azimuth * Math.PI / 180;
+
+  towerGroup.add(g);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Animation loop
+// ═══════════════════════════════════════════════════════════════
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+// Resize
+window.addEventListener('resize', () => {
+  let rw = threeContainer.clientWidth || 480;
+  let rh = threeContainer.clientHeight || 500;
+  camera.aspect = rw / rh;
+  camera.updateProjectionMatrix();
+  renderer.setSize(rw, rh);
+});
+
+// ═══════════════════════════════════════════════════════════════
+// Main init — data is inline, no async loading needed
+// ═══════════════════════════════════════════════════════════════
+function init() {
+  // ── GIS Map (MapLibre GL) ──
+  map = new maplibregl.Map({
+    container: 'gis-map',
+    style: 'https://tiles.openfreemap.org/styles/liberty',
+    center: [-115.885, 52.412],
+    zoom: 12.5,
+    pitch: 50,
+    bearing: -15,
+  });
+
+  map.addControl(new maplibregl.NavigationControl(), 'top-right');
+  map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
+  window._map = map;
+
+  // Init 3D tower scene
+  animate();
+
+  // Load default line
+  map.on('load', () => {
+    addLine(defaultLineJson);
+    // Add crossing markers from default line data
+    const defaultCrossings = (defaultLineJson.crossingsTerrain || []).map(c => ({
+      coords: [c.crossingPointX, c.crossingPointY],
+      type: c.type,
+      name: c.nameDescription
+    }));
+    if (defaultCrossings.length) {
+      map.addSource('crossings', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: defaultCrossings.map(c => ({ type: 'Feature', properties: { type: c.type, name: c.name }, geometry: { type: 'Point', coordinates: c.coords } })) }
+      });
+      map.addLayer({ id: 'crossing-markers', type: 'circle', source: 'crossings', paint: { 'circle-radius': 6, 'circle-color': '#f97316', 'circle-stroke-color': '#fff', 'circle-stroke-width': 1.5 } });
+    }
+    document.getElementById('loading').style.display = 'none';
+  });
+
+  // Import button handler
+  document.getElementById('importBtn').onclick = () => document.getElementById('jsonInput').click();
+  document.getElementById('jsonInput').onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const json = JSON.parse(ev.target.result);
+        if (!json.lineInfo || !json.towerSurvey) {
+          showToast('Invalid JSON: missing lineInfo or towerSurvey');
+          return;
+        }
+        addLine(json);
+      } catch (err) {
+        showToast('Import failed: ' + err.message);
+        console.error(err);
+      }
+      e.target.value = '';
+    };
+    reader.readAsText(file);
+  };
+}
+
+// Start the app
+try {
+  init();
+} catch (err) {
+  const ld = document.getElementById('loading');
+  if (ld) ld.innerHTML = 'Failed to load: ' + err.message;
+  console.error(err);
+}
+
+function renderTower(tower) {
+  buildTower(tower);
+  controls.target.set(0, tower.height * 0.5, 0);
+}
+
+// Toast
+let toastTimer;
+function showToast(msg) {
+  let toast = document.querySelector('.toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.className = 'toast';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = msg;
+  toast.style.opacity = '1';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.style.opacity = '0', 2500);
+}
+</script>
+</body>
+</html>
